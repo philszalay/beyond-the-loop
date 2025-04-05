@@ -62,7 +62,7 @@
 		getTagsById,
 		updateChatById
 	} from '$lib/apis/chats';
-	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
+	import { generateOpenAIChatCompletion, generateMagicPrompt } from '$lib/apis/openai';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { queryMemory } from '$lib/apis/memories';
@@ -136,6 +136,8 @@
 	let chatFiles = [];
 	let files = [];
 	let params = {};
+	let isMagicLoading = false;
+	let initNewChatCompleted = false;
 
 	$: if (chatIdProp) {
 		(async () => {
@@ -397,6 +399,7 @@
 			chatIdUnsubscriber = chatId.subscribe(async (value) => {
 				if (!value) {
 					await initNewChat();
+					initNewChatCompleted = true;
 				}
 			});
 		} else {
@@ -1318,6 +1321,20 @@
 		await sendPrompt(history, userPrompt, userMessageId, { newChat: true });
 	};
 
+	const submitMagicPrompt = async (userPrompt) => {
+		isMagicLoading = true;
+
+		try {
+			const res = await generateMagicPrompt(localStorage.token, { prompt: userPrompt });
+			console.log(res);
+			prompt = res;
+		} catch (err) {
+			console.error('Magic prompt error:', err);
+		} finally {
+			isMagicLoading = false;
+		}
+	};
+
 	const sendPrompt = async (
 		_history,
 		prompt: string,
@@ -1973,19 +1990,20 @@
 								/>
 							</div>
 						</div>
-										
+
 						<div class=" pb-[1rem] max-w-[980px] mx-auto w-full">
-							<div class="px-3 mb-2.5 flex items-center justify-between ">
-								<ModelSelector bind:selectedModels showSetDefault={!history.currentId} />
-								<div class="flex space-x-[5px] items-center py-[3px] px-[6px] rounded-[6px] dark:bg-[#272525]">
-									<BookIcon/>
-									<a
-									class="min-w-fit text-[10px] dark:text-[#787878]"
-									href="/workspace/prompts">{$i18n.t('Prompts')}
+							<div class="px-3 mb-2.5 flex items-center justify-between">
+								<ModelSelector {initNewChatCompleted} bind:selectedModels showSetDefault={!history.currentId} />
+								<div
+									class="flex space-x-[5px] items-center py-[3px] px-[6px] rounded-md dark:bg-customGray-800"
+								>
+									<BookIcon />
+									<a class="min-w-fit text-2xs dark:text-customGray-600" href="/workspace/prompts"
+										>{$i18n.t('Prompts')}
 									</a>
 								</div>
 							</div>
-							
+
 							<MessageInput
 								{history}
 								{selectedModels}
@@ -1997,6 +2015,7 @@
 								bind:codeInterpreterEnabled
 								bind:webSearchEnabled
 								bind:atSelectedModel
+								{isMagicLoading}
 								transparentBackground={$settings?.backgroundImageUrl ?? false}
 								{stopResponse}
 								{createMessagePair}
@@ -2028,6 +2047,16 @@
 										);
 									}
 								}}
+								on:magicPrompt={async (e) => {
+									if (e.detail) {
+										await tick();
+										submitMagicPrompt(
+											($settings?.richTextInput ?? true)
+												? e.detail.replaceAll('\n\n', '\n')
+												: e.detail
+										);
+									}
+								}}
 							/>
 
 							<div
@@ -2040,6 +2069,7 @@
 						<div class="overflow-auto w-full h-full flex items-center">
 							<Placeholder
 								{history}
+								{initNewChatCompleted}
 								bind:selectedModels
 								bind:files
 								bind:prompt
@@ -2049,6 +2079,7 @@
 								bind:codeInterpreterEnabled
 								bind:webSearchEnabled
 								bind:atSelectedModel
+								{isMagicLoading}
 								transparentBackground={$settings?.backgroundImageUrl ?? false}
 								{stopResponse}
 								{createMessagePair}
@@ -2063,8 +2094,20 @@
 								}}
 								on:submit={async (e) => {
 									if (e.detail) {
+										// console.log(e.detail)
 										await tick();
 										submitPrompt(
+											($settings?.richTextInput ?? true)
+												? e.detail.replaceAll('\n\n', '\n')
+												: e.detail
+										);
+									}
+								}}
+								on:magicPrompt={async (e) => {
+									console.log('🔥 magicPrompt from child:', e.detail);
+									if (e.detail) {
+										await tick();
+										submitMagicPrompt(
 											($settings?.richTextInput ?? true)
 												? e.detail.replaceAll('\n\n', '\n')
 												: e.detail

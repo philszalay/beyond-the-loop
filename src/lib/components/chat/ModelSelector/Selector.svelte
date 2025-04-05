@@ -43,7 +43,7 @@
 	}[] = [];
 
 	export let className = '180px';
-	export let triggerClassName = 'text-[10px]';
+	export let triggerClassName = 'text-2xs';
 
 	let show = false;
 
@@ -55,16 +55,18 @@
 
 	let selectedModelIdx = 0;
 
+	const filteredSourceItems = items.filter((item) => item.model?.info?.base_model_id == null);
+
 	const fuse = new Fuse(
-		items.map((item) => {
-			const _item = {
-				...item,
-				modelName: item.model?.name,
-				tags: item.model?.info?.meta?.tags?.map((tag) => tag.name).join(' '),
-				desc: item.model?.info?.meta?.description
-			};
-			return _item;
-		}),
+		filteredSourceItems.map((item) => {
+				const _item = {
+					...item,
+					modelName: item.model?.name,
+					tags: item.model?.info?.meta?.tags?.map((tag) => tag.name).join(' '),
+					desc: item.model?.info?.meta?.description
+				};
+				return _item;
+			}),
 		{
 			keys: ['value', 'tags', 'modelName'],
 			threshold: 0.4
@@ -75,7 +77,7 @@
 		? fuse.search(searchValue).map((e) => {
 				return e.item;
 			})
-		: items;
+		: filteredSourceItems;
 
 	const pullModelHandler = async () => {
 		const sanitizedModelTag = searchValue.trim().replace(/^ollama\s+(run|pull)\s+/, '');
@@ -219,9 +221,7 @@
 			toast.success(`${model} download has been canceled`);
 		}
 	};
-	$: {
-		console.log(filteredItems);
-	}
+	
 	function getModelIcon(label: string): string {
 		const lower = label.toLowerCase();
 
@@ -229,14 +229,14 @@
 			return '/perplexity-ai-icon.svg';
 		} else if (lower.includes('gpt')) {
 			return '/chatgpt-icon.svg';
-		} else if(lower.includes('claude')) {
+		} else if (lower.includes('claude')) {
 			return '/claude-ai-icon.svg';
-		} else if(lower.includes('gemini')) {
+		} else if (lower.includes('gemini')) {
 			return '/google-gemini-icon.svg';
-		} else if(lower.includes('mistral') || lower.includes('pixtral')) {
+		} else if (lower.includes('mistral') || lower.includes('pixtral')) {
 			return '/mistral-color.svg';
-		}else {
-			return '/static/favicon.png'
+		} else {
+			return '/static/favicon.png';
 		}
 	}
 </script>
@@ -259,7 +259,11 @@
 			class="flex w-full text-left px-0.5 outline-none bg-transparent truncate {triggerClassName} justify-between font-medium placeholder-gray-400 focus:outline-none"
 		>
 			{#if selectedModel}
-				<img src={getModelIcon(selectedModel.label)} alt="Model" class="rounded-full size-4 self-center mr-2" />
+				<img
+					src={getModelIcon(selectedModel.label)}
+					alt="Model"
+					class="rounded-full size-4 self-center mr-2"
+				/>
 				{selectedModel.label}
 			{:else}
 				{placeholder}
@@ -271,7 +275,7 @@
 	<DropdownMenu.Content
 		class=" z-40 {$mobile
 			? `w-full`
-			: `${className}`} w-[180px] justify-start rounded-xl border dark:border-[#313337] bg-white dark:bg-[#1E1E1E] dark:text-white shadow-lg  outline-none"
+			: `${className}`} w-[180px] justify-start rounded-xl border dark:border-customGray-700 bg-white dark:bg-customGray-900 dark:text-white shadow-lg  outline-none"
 		transition={flyAndScale}
 		side={$mobile ? 'bottom' : 'bottom-start'}
 		sideOffset={3}
@@ -279,14 +283,14 @@
 		<slot>
 			{#if searchEnabled}
 				<div class="flex items-center relative gap-2.5 px-2.5 mt-2.5 mb-3">
-					<div class="absolute left-5 text-[#939292]">
+					<div class="absolute left-5 text-customGray-300">
 						<Search className="size-3" strokeWidth="2.5" />
 					</div>
 
 					<input
 						id="model-search-input"
 						bind:value={searchValue}
-						class="w-full text-sm bg-transparent outline-none pl-7 h-[25px] rounded-lg border border-[#313337] placeholder:text-[10px]"
+						class="w-full text-sm bg-transparent outline-none pl-7 h-[25px] rounded-lg border border-customGray-700 placeholder:text-2xs"
 						placeholder={searchPlaceholder}
 						autocomplete="off"
 						on:keydown={(e) => {
@@ -314,7 +318,7 @@
 				{#each filteredItems as item, index}
 					<button
 						aria-label="model-item"
-						class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-[5px] px-2 text-sm text-gray-700 dark:text-gray-100 outline-none transition-all duration-75 hover:bg-gray-100 dark:hover:bg-[#181818] rounded-lg cursor-pointer data-[highlighted]:bg-muted {index ===
+						class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-[5px] px-2 text-sm text-gray-700 dark:text-gray-100 outline-none transition-all duration-75 hover:bg-gray-100 dark:hover:bg-customGray-950 rounded-lg cursor-pointer data-[highlighted]:bg-muted {index ===
 						selectedModelIdx
 							? 'bg-gray-100 dark:bg-gray-800 group-hover:bg-transparent'
 							: ''}"
@@ -351,7 +355,7 @@
 												alt="Model"
 												class="rounded-full size-5 flex items-center mr-2"
 											/>
-											<span class="text-[10px] leading-normal">{item.label}</span>
+											<span class="text-2xs leading-normal">{item.label}</span>
 											<!-- </Tooltip> -->
 										</div>
 										<div class="text-[9px] ml-7 text-[#808080] leading-normal">

@@ -31,6 +31,7 @@
 	import Dropzone from './Dropzone.svelte';
 	import { v4 as uuidv4 } from 'uuid';
 	import DocumentIcon from '$lib/components/icons/DocumentIcon.svelte';
+	import ChatPreview from '$lib/components/chat/ChatPreview.svelte';
 	
 
 	const i18n = getContext('i18n');
@@ -1246,7 +1247,7 @@
 					</form>
 				</div>
 			{/if}
-			<div class="w-1/2"></div>
+			<div class="w-1/2"><ChatPreview selectedModels={[info.base_model_id]}/></div>
 		</div>
 	</div>
 {/if}

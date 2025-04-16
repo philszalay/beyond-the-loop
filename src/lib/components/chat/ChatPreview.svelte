@@ -89,6 +89,7 @@
 	import BookIcon from '../icons/BookIcon.svelte';
 
 	export let chatIdProp = '';
+	export let preparedAssistantInfo = {};
 
 	let loading = false;
 
@@ -1545,13 +1546,14 @@
 						})
 			}));
         
-        console.log(messages, '------------------>')
+        console.log(preparedAssistantInfo, '------------------>')
 
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
 			{
 				stream: stream,
 				model: model.id,
+				assistant: preparedAssistantInfo,
 				messages: messages,
 				params: {
 					...$settings?.params,

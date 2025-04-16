@@ -200,6 +200,53 @@
 		success = false;
 	};
 
+	let preparedAssistantInfo;
+
+		$: {
+		const preparedMeta = {
+			...info.meta,
+			capabilities,
+			files,
+			description: info.meta.description.trim() !== ''
+				? info.meta.description
+				: null,
+		};
+
+		if (knowledge.length > 0) {
+			preparedMeta.knowledge = knowledge;
+		}
+
+		const cleanedParams = { ...info.params };
+
+		Object.keys(cleanedParams).forEach((key) => {
+			if (
+				cleanedParams[key] === '' ||
+				cleanedParams[key] === null ||
+				(info.base_model_id === 'GPT o3-mini' && key === 'temperature')
+			) {
+				delete cleanedParams[key];
+			}
+		});
+
+		if (params.stop) {
+			cleanedParams.stop = params.stop
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean);
+		} else {
+			delete cleanedParams.stop;
+		}
+
+		preparedAssistantInfo = {
+			...info,
+			id,
+			name,
+			meta: preparedMeta,
+			params: cleanedParams,
+			access_control: accessControl,
+		};
+	}
+
 	onMount(async () => {
 		await tools.set(await getTools(localStorage.token));
 		await functions.set(await getFunctions(localStorage.token));
@@ -1247,7 +1294,7 @@
 					</form>
 				</div>
 			{/if}
-			<div class="w-1/2"><ChatPreview selectedModels={[info.base_model_id]}/></div>
+			<div class="w-1/2"><ChatPreview {preparedAssistantInfo} selectedModels={[info.base_model_id]}/></div>
 		</div>
 	</div>
 {/if}

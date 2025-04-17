@@ -305,7 +305,8 @@ export const chatCompletion = async (
 export const generateOpenAIChatCompletion = async (
 	token: string = '',
 	body: object,
-	url: string = `${WEBUI_BASE_URL}/api`
+	url: string = `${WEBUI_BASE_URL}/api`,
+	model_form_data: object | null = null,
 ) => {
 	let error = null;
 

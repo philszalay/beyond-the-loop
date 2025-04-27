@@ -34,6 +34,7 @@
 	import AddKnowledgeModal from '../Knowledge/AddKnowledgeModal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ChatPreview from '$lib/components/chat/ChatPreview.svelte';
+	import Chat from '$lib/components/chat/Chat.svelte';
 	
 
 	const i18n = getContext('i18n');
@@ -1343,7 +1344,7 @@
 					</form>
 				</div>
 			{/if}
-			<div class="w-1/2"><ChatPreview {preparedAssistantInfo} selectedModels={[info.base_model_id]}/></div>
+			<div class="w-1/2"><Chat {preparedAssistantInfo} isPreview={true} selectedModels={[preparedAssistantInfo?.base_model_id]}/></div>
 		</div>
 	</div>
 {/if}

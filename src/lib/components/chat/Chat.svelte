@@ -88,6 +88,10 @@
 	import ModelSelector from './ModelSelector.svelte';
 	import BookIcon from '../icons/BookIcon.svelte';
 
+
+	export let isPreview = false;
+	export let preparedAssistantInfo = {};
+
 	export let chatIdProp = '';
 
 	let loading = false;
@@ -112,7 +116,9 @@
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
 
-	let selectedModels = [''];
+	export let selectedModels = [''];
+
+	$:console.log(selectedModels)
 	let atSelectedModel: Model | undefined;
 	let selectedModelIds = [];
 	$: selectedModelIds = atSelectedModel !== undefined ? [atSelectedModel.id] : selectedModels;
@@ -693,6 +699,9 @@
 			} else {
 				selectedModels = [''];
 			}
+		}
+		if(isPreview) {
+			selectedModels = [''];
 		}
 
 		await showControls.set(false);
@@ -1551,7 +1560,8 @@
 			localStorage.token,
 			{
 				stream: stream,
-				model: model.id,
+				model: isPreview ? null : model.id,
+				assistant: preparedAssistantInfo,
 				messages: messages,
 				params: {
 					...$settings?.params,
@@ -1605,8 +1615,8 @@
 				selectedModels[0] === model.id
 					? {
 							background_tasks: {
-								title_generation: $settings?.title?.auto ?? true,
-								tags_generation: $settings?.autoTags ?? true
+								title_generation: isPreview ? null : ($settings?.title?.auto ?? true),
+								tags_generation: isPreview ? null : ($settings?.autoTags ?? true)
 							}
 						}
 					: {}),
@@ -1864,6 +1874,7 @@
 			}
 		}
 	};
+	
 </script>
 
 <svelte:head>
@@ -1896,7 +1907,7 @@
 />
 
 <div
-	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
+	class="{isPreview ? 'h-full w-full max-w-full flex flex-col' : 'h-screen'}  max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar && !isPreview
 		? '  md:max-w-[calc(100%-260px)]'
 		: ' '} w-full max-w-full flex flex-col"
 	id="chat-container"
@@ -1994,17 +2005,19 @@
 						</div>
 
 						<div class=" pb-[1rem] max-w-[980px] mx-auto w-full">
-							<div class="px-3 mb-2.5 flex items-center justify-between">
-								<ModelSelector {initNewChatCompleted} bind:selectedModels showSetDefault={!history.currentId} />
-								<div
-									class="flex space-x-[5px] items-center py-[3px] px-[6px] rounded-md dark:bg-customGray-800"
-								>
-									<BookIcon />
-									<a class="min-w-fit text-xs dark:text-customGray-600" href="/workspace/prompts"
-										>{$i18n.t('Prompts')}
-									</a>
+							{#if !isPreview}
+								<div class="px-3 mb-2.5 flex items-center justify-between">
+									<ModelSelector {initNewChatCompleted} bind:selectedModels showSetDefault={!history.currentId} />
+									<div
+										class="flex space-x-[5px] items-center py-[3px] px-[6px] rounded-md dark:bg-customGray-800"
+									>
+										<BookIcon />
+										<a class="min-w-fit text-xs dark:text-customGray-600" href="/workspace/prompts"
+											>{$i18n.t('Prompts')}
+										</a>
+									</div>
 								</div>
-							</div>
+							{/if}
 							<div class="mb-4">
 								<MessageInput
 									{history}
@@ -2021,6 +2034,7 @@
 									transparentBackground={$settings?.backgroundImageUrl ?? false}
 									{stopResponse}
 									{createMessagePair}
+									{isPreview}
 									onChange={(input) => {
 										if (input.prompt) {
 											localStorage.setItem(`chat-input-${$chatId}`, JSON.stringify(input));
@@ -2061,66 +2075,129 @@
 									}}
 								/>
 							</div>
-
-							<div
-								class="absolute bottom-1 text-xs text-gray-500 text-center line-clamp-1 right-0 left-0"
-							>
-								{$i18n.t('LLMs can make mistakes. Verify important information.')}
-							</div>
+							{#if !isPreview}
+								<div
+									class="absolute bottom-1 text-xs text-gray-500 text-center line-clamp-1 right-0 left-0"
+								>
+									{$i18n.t('LLMs can make mistakes. Verify important information.')}
+								</div>
+							{/if}
 						</div>
 					{:else}
-						<div class="overflow-auto w-full h-full flex items-center">
-							<Placeholder
-								{history}
-								{initNewChatCompleted}
-								bind:selectedModels
-								bind:files
-								bind:prompt
-								bind:autoScroll
-								bind:selectedToolIds
-								bind:imageGenerationEnabled
-								bind:codeInterpreterEnabled
-								bind:webSearchEnabled
-								bind:atSelectedModel
-								{isMagicLoading}
-								transparentBackground={$settings?.backgroundImageUrl ?? false}
-								{stopResponse}
-								{createMessagePair}
-								on:upload={async (e) => {
-									const { type, data } = e.detail;
+						<div class="overflow-auto w-full h-full flex {isPreview ? 'items-end' : 'items-center'}">
+							{#if isPreview}
+								<div class="mb-6 w-full">
+									<MessageInput
+										{history}
+										{selectedModels}
+										bind:files
+										bind:prompt
+										bind:autoScroll
+										bind:selectedToolIds
+										bind:imageGenerationEnabled
+										bind:codeInterpreterEnabled
+										bind:webSearchEnabled
+										bind:atSelectedModel
+										{isMagicLoading}
+										transparentBackground={$settings?.backgroundImageUrl ?? false}
+										{stopResponse}
+										{createMessagePair}
+										{isPreview}
+										onChange={(input) => {
+											if (input.prompt) {
+												localStorage.setItem(`chat-input-${$chatId}`, JSON.stringify(input));
+											} else {
+												localStorage.removeItem(`chat-input-${$chatId}`);
+											}
+										}}
+										on:upload={async (e) => {
+											const { type, data } = e.detail;
 
-									if (type === 'web') {
-										await uploadWeb(data);
-									} else if (type === 'youtube') {
-										await uploadYoutubeTranscription(data);
-									}
-								}}
-								on:submit={async (e) => {
-									if (e.detail) {
-										// console.log(e.detail)
-										await tick();
-										submitPrompt(
-											($settings?.richTextInput ?? true)
-												? e.detail.replaceAll('\n\n', '\n')
-												: e.detail
-										);
-									}
-								}}
-								on:magicPrompt={async (e) => {
-									console.log('🔥 magicPrompt from child:', e.detail);
-									if (e.detail) {
-										await tick();
-										submitMagicPrompt(
-											($settings?.richTextInput ?? true)
-												? e.detail.replaceAll('\n\n', '\n')
-												: e.detail
-										);
-									}
-								}}
-							/>
-							<div class="absolute bottom-1 text-xs text-gray-500 text-center line-clamp-1 right-0 left-0">
-								{$i18n.t('LLMs can make mistakes. Verify important information.')}
-							</div>
+											if (type === 'web') {
+												await uploadWeb(data);
+											} else if (type === 'youtube') {
+												await uploadYoutubeTranscription(data);
+											} else if (type === 'google-drive') {
+												await uploadGoogleDriveFile(data);
+											}
+										}}
+										on:submit={async (e) => {
+											if (e.detail) {
+												await tick();
+												submitPrompt(
+													($settings?.richTextInput ?? true)
+														? e.detail.replaceAll('\n\n', '\n')
+														: e.detail
+												);
+											}
+										}}
+										on:magicPrompt={async (e) => {
+											if (e.detail) {
+												await tick();
+												submitMagicPrompt(
+													($settings?.richTextInput ?? true)
+														? e.detail.replaceAll('\n\n', '\n')
+														: e.detail
+												);
+											}
+										}}
+									/>
+								</div>
+							{:else}
+								<Placeholder
+									{history}
+									{initNewChatCompleted}
+									bind:selectedModels
+									bind:files
+									bind:prompt
+									bind:autoScroll
+									bind:selectedToolIds
+									bind:imageGenerationEnabled
+									bind:codeInterpreterEnabled
+									bind:webSearchEnabled
+									bind:atSelectedModel
+									{isMagicLoading}
+									transparentBackground={$settings?.backgroundImageUrl ?? false}
+									{stopResponse}
+									{createMessagePair}
+									on:upload={async (e) => {
+										const { type, data } = e.detail;
+
+										if (type === 'web') {
+											await uploadWeb(data);
+										} else if (type === 'youtube') {
+											await uploadYoutubeTranscription(data);
+										}
+									}}
+									on:submit={async (e) => {
+										if (e.detail) {
+											// console.log(e.detail)
+											await tick();
+											submitPrompt(
+												($settings?.richTextInput ?? true)
+													? e.detail.replaceAll('\n\n', '\n')
+													: e.detail
+											);
+										}
+									}}
+									on:magicPrompt={async (e) => {
+										console.log('🔥 magicPrompt from child:', e.detail);
+										if (e.detail) {
+											await tick();
+											submitMagicPrompt(
+												($settings?.richTextInput ?? true)
+													? e.detail.replaceAll('\n\n', '\n')
+													: e.detail
+											);
+										}
+									}}
+								/>
+							{/if}
+							{#if !isPreview}
+								<div class="absolute bottom-1 text-xs text-gray-500 text-center line-clamp-1 right-0 left-0">
+									{$i18n.t('LLMs can make mistakes. Verify important information.')}
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>

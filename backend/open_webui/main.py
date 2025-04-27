@@ -71,7 +71,7 @@ from open_webui.routers.retrieval import (
 from open_webui.internal.db import Session
 
 from open_webui.models.functions import Functions
-from beyond_the_loop.models.models import Models
+from beyond_the_loop.models.models import ModelForm, ModelModel, Models
 from beyond_the_loop.models.users import Users
 from beyond_the_loop.routers import auths
 from beyond_the_loop.routers import analytics
@@ -835,6 +835,7 @@ async def get_base_models(request: Request, user=Depends(get_admin_user)):
 async def chat_completion(
     request: Request,
     form_data: dict,
+    model_form_data: ModelForm,
     user=Depends(get_verified_user),
 ):
     if not request.app.state.MODELS:
@@ -842,11 +843,25 @@ async def chat_completion(
 
     tasks = form_data.pop("background_tasks", None)
     try:
-        model_id = form_data.get("model", None)
+        model_id = model_form_data.base_model_id or form_data.get("model", None)
+
         if model_id not in request.app.state.MODELS:
             raise Exception("Model not found")
+
         model = request.app.state.MODELS[model_id]
-        model_info = Models.get_model_by_id(model_id)
+
+        model_info = ModelModel(
+            **{
+                **model_form_data.model_dump(),
+                "company_id": user.company_id,
+                "user_id": user.id,
+                "created_at": int(time.time()),
+                "updated_at": int(time.time()),
+            }
+        ) if model_form_data else Models.get_model_by_id(model_id)
+
+        print(f"model_info: {model_info}")
+        print(f"model: {model}")
 
         # Check if user has access to the model
         if not BYPASS_MODEL_ACCESS_CONTROL and user.role == "user":

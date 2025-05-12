@@ -24,11 +24,13 @@ class Company(Base):
     default_model = Column(String, nullable=True)
     allowed_models = Column(Text, nullable=True)
     credit_balance = Column(Integer, default=0)
+    flex_credit_balance = Column(Integer, nullable=True)
     auto_recharge = Column(Boolean, default=False)
     credit_card_number = Column(String, nullable=True)
     size = Column(String, nullable=True)
     industry = Column(String, nullable=True)
     team_function = Column(String, nullable=True)
+    stripe_customer_id = Column(String, nullable=True)
 
     users = relationship("User", back_populates="company", cascade="all, delete-orphan")
 
@@ -39,11 +41,13 @@ class CompanyModel(BaseModel):
     default_model: Optional[str] = "GPT 4o"
     allowed_models: Optional[str] = None
     credit_balance: Optional[int] = 0
+    flex_credit_balance: Optional[int] = None
     auto_recharge: Optional[bool] = False
     credit_card_number: Optional[str] = None
     size: Optional[str] = None
     industry: Optional[str] = None
     team_function: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -214,15 +218,15 @@ class CompanyTable:
                 return True
             return False
 
-    def add_credit_balance(self, company_id: str, credits_to_add: int) -> bool:
+    def add_flex_credit_balance(self, company_id: str, credits_to_add: int) -> bool:
         """Add credits to company's balance"""
         with get_db() as db:
             company = db.query(Company).filter(Company.id == company_id).first()
             if company:
                 if company.credit_balance is None:
-                    company.credit_balance = credits_to_add
+                    company.flex_credit_balance = credits_to_add
                 else:
-                    company.credit_balance += credits_to_add
+                    company.flex_credit_balance += credits_to_add
                 db.commit()
                 return True
             return False
@@ -255,6 +259,15 @@ class CompanyTable:
                 return CompanyModel.model_validate(company)
         except Exception as e:
             print(f"Error creating company: {e}")
+            return None
+
+    def get_company_by_stripe_customer_id(self, stripe_customer_id: str) -> Optional[CompanyModel]:
+        try:
+            with get_db() as db:
+                company = db.query(Company).filter_by(stripe_customer_id=stripe_customer_id).first()
+                return CompanyModel.model_validate(company)
+        except Exception as e:
+            print(f"Error getting company by stripe_customer_id: {e}")
             return None
 
 Companies = CompanyTable()

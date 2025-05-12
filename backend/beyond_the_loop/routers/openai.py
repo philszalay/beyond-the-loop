@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from beyond_the_loop.utils import magic_prompt_util
-from beyond_the_loop.routers.payments import charge_customer
+from beyond_the_loop.routers.payments import recharge_flex_credits
 from beyond_the_loop.models.models import Models
 from beyond_the_loop.models.model_message_credit_costs import ModelMessageCreditCosts
 from beyond_the_loop.models.companies import Companies
@@ -607,7 +607,7 @@ async def generate_chat_completion(
             if Companies.get_auto_recharge(user.company_id):
                 try:
                     # Trigger auto-recharge using the charge_customer endpoint
-                    await charge_customer(user)
+                    await recharge_flex_credits(user)
                     # Note: The webhook will handle adding the credits when payment succeeds
                     should_send_budget_email_80 = False  # Don't send email if auto-recharge succeeded
                 except HTTPException as e:

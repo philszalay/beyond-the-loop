@@ -46,9 +46,12 @@ def create_and_finalize_invoice(stripe_customer_id, payment_intent_id, descripti
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Creates the checkout session in stripe and returns the url
 @router.post("/create-checkout-session/")
 async def create_checkout_session(user=Depends(get_verified_user)):
     try:
+        stripe_customer_id = Companies.get_company_by_id(user.company_id).stripe_customer_id
+
         # Create a Stripe Checkout session
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
@@ -63,11 +66,11 @@ async def create_checkout_session(user=Depends(get_verified_user)):
                 'quantity': 1,
             }],
             mode='payment',
-            customer=user.stripe_customer_id if user.stripe_customer_id else None,
-            customer_email=None if user.stripe_customer_id else user.email,
-            customer_creation='always' if not user.stripe_customer_id else None,  # Always create a customer if they don't have one
-            success_url=f'https://www.google.com',  # Frontend success page
-            cancel_url=f'https://www.google.com',  # Frontend cancel page
+            customer=stripe_customer_id if stripe_customer_id else None,
+            customer_email=None if stripe_customer_id else user.email,
+            customer_creation='always' if not stripe_customer_id else None,  # Always create a customer if they don't have one
+            success_url=os.getenv('BACKEND_ADDRESS'),  # Frontend success page
+            cancel_url=os.getenv('BACKEND_ADDRESS'),  # Frontend cancel page
             payment_intent_data={
                 'metadata': {
                     'from_checkout_session': 'true'
@@ -81,6 +84,7 @@ async def create_checkout_session(user=Depends(get_verified_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Called by stripe after payment process is done
 @router.post("/checkout-webhook")
 async def checkout_webhook(request: Request, stripe_signature: str = Header(None)):
     if not stripe_signature:
@@ -98,12 +102,13 @@ async def checkout_webhook(request: Request, stripe_signature: str = Header(None
         event_type = event.get("type")
         event_data = event.get("data", {}).get("object", {})
 
-        # Handle Stripe events
+        # Payment via Stripe checkout
         if event_type == "checkout.session.completed":
             if event_data.get("payment_status") == "paid":
                 handle_checkout_session_completed(event_data)
                 return
 
+        # Automatic recharging - skipped it from checkout session
         elif event_type == "payment_intent.succeeded":
             handle_payment_intent_succeeded(event_data)
             return
@@ -176,15 +181,17 @@ def handle_checkout_session_completed(data):
     user_email = data["customer_details"]["email"]
     user = Users.get_user_by_email(user_email)
 
+    stripe_customer_id = Companies.get_company_by_id(user.company_id).stripe_customer_id
+
     try:
         # Save Stripe Customer ID if missing
-        if user.stripe_customer_id is None:
-            Users.update_user_by_id(user.id, {"stripe_customer_id": data["customer"]})
+        if stripe_customer_id is None:
+            Companies.update_company_by_id(user.company_id, {"stripe_customer_id": data["customer"]})
 
         # Update company credits
         company = Companies.get_company_by_id(user.company_id)
 
-        Companies.add_credit_balance(user.company_id, CREDITS_TO_ADD)
+        Companies.add_flex_credit_balance(user.company_id, CREDITS_TO_ADD)
 
         # Get payment method details and update card number
         payment_intent = stripe.PaymentIntent.retrieve(data["payment_intent"])
@@ -241,9 +248,9 @@ def handle_payment_intent_succeeded(data):
         if data.get("metadata", {}).get("from_checkout_session"):
             return
 
-        user = Users.get_user_by_stripe_customer_id(data["customer"])
+        company = Companies.get_company_by_stripe_customer_id(data["customer"])
 
-        if not user:
+        if not company:
             raise Exception(f"No user found with stripe customer id: {data['customer']}")
 
         # Update company credits
@@ -251,10 +258,10 @@ def handle_payment_intent_succeeded(data):
         if isinstance(credits_to_add, str):
             credits_to_add = int(credits_to_add)  # Convert string to integer if needed
 
-        Companies.add_credit_balance(user.company_id, credits_to_add)
+        Companies.add_flex_credit_balance(company.id, credits_to_add)
 
         create_and_finalize_invoice(
-            stripe_customer_id=user.stripe_customer_id,
+            stripe_customer_id=company.stripe_customer_id,
             payment_intent_id=data["id"],
             description="Credits Purchase via Off-Session Payment"
         )
@@ -265,13 +272,15 @@ def handle_payment_intent_succeeded(data):
         raise
 
 
-@router.post("/charge-customer/")
-async def charge_customer(user=Depends(get_verified_user)):
+@router.post("/recharge-flex-credits/")
+async def recharge_flex_credits(user=Depends(get_verified_user)):
     try:
-        if not user.stripe_customer_id:
+        stripe_customer_id = Companies.get_company_by_id(user.company_id).stripe_customer_id
+
+        if not stripe_customer_id:
             raise HTTPException(status_code=400, detail="User does not have a saved Stripe customer ID")
 
-        customer = stripe.Customer.retrieve(user.stripe_customer_id)
+        customer = stripe.Customer.retrieve(stripe_customer_id)
         payment_method = customer.get("invoice_settings", {}).get("default_payment_method")
 
         if not payment_method:
@@ -280,7 +289,7 @@ async def charge_customer(user=Depends(get_verified_user)):
         payment_intent = stripe.PaymentIntent.create(
             amount=AMOUNT,
             currency='eur',
-            customer=user.stripe_customer_id,
+            customer=stripe_customer_id,
             payment_method=payment_method,
             off_session=True,
             confirm=True,
@@ -301,20 +310,22 @@ async def charge_customer(user=Depends(get_verified_user)):
 async def customer_billing_page(user=Depends(get_verified_user)):
     test_string = ''
     try:
+        stripe_customer_id = Companies.get_company_by_id(user.company_id).stripe_customer_id
+
         test_string += "got user\n"
-        if not user.stripe_customer_id:
+        if not stripe_customer_id:
             test_string += "did not had strip customer id\n"
             data = stripe.Customer.create(
                 name=user.first_name + " " + user.last_name,
                 email=user.email,
             )
-            user = Users.update_user_by_id(user.id, {"stripe_customer_id": data['id']})
+            user = Companies.update_company_by_id(user.company_id, {"stripe_customer_id": data['id']})
             test_string += "updated the user\n"
 
         test_string += "fetch user again\n"
         # Create a Customer Portal session
         portal_session = stripe.billing_portal.Session.create(
-            customer=user.stripe_customer_id,
+            customer=stripe_customer_id,
             return_url=f"",
         )
 
@@ -339,13 +350,13 @@ def handle_payment_method_detached(event_data):
             print("Stripe Customer ID is missing from the event data.")
             return
 
-        user = Users.get_user_by_stripe_customer_id(stripe_customer_id)
-        if not user:
+        company = Companies.get_company_by_stripe_customer_id(stripe_customer_id)
+        if not company:
             print(f"User not found for Stripe Customer ID: {stripe_customer_id}")
             return
 
         new_card_number = None
-        updated_company = Companies.update_company_by_id(user.company_id, {"auto_recharge": False, "credit_card_number": None})
+        updated_company = Companies.update_company_by_id(company.id, {"auto_recharge": False, "credit_card_number": None})
 
         if updated_company:
             print(f"Updated card number for company {updated_company.name}: {new_card_number}")
@@ -376,12 +387,12 @@ def handle_payment_method_attached(event_data):
         new_card_number = f"**** **** **** {last4}"
 
         # Find user and update company card details
-        user = Users.get_user_by_stripe_customer_id(stripe_customer_id)
-        if not user:
+        company = Companies.get_company_by_id(stripe_customer_id)
+        if not company:
             print(f"No user found for Stripe customer ID: {stripe_customer_id}")
             return
 
-        Companies.update_company_by_id(user.company_id, {
+        Companies.update_company_by_id(company.id, {
             "credit_card_number": new_card_number,
             "auto_recharge": True
         })
@@ -394,7 +405,7 @@ def handle_payment_method_attached(event_data):
             }
         )
 
-        print(f"Updated card number for company ID {user.company_id}: {new_card_number}")
+        print(f"Updated card number for company ID {company.id}: {new_card_number}")
 
     except Exception as e:
         print(f"Error handling payment_method.attached: {e}")

@@ -216,6 +216,19 @@
 			};
 		});
 	};
+
+	let selectedTab = 'general-settings';
+
+	$: modalParam = $page.url.searchParams.get('modal');
+	// $: tabParam = $page.url.searchParams.get('tab');
+
+	// Watch for changes in URL params
+	$: {
+		if (modalParam === 'company-settings') {
+			showCompanySettings.set(true);
+			// selectedTab = tabParam || 'general-settings';
+		}
+	}
 </script>
 
 <SettingsModal bind:show={$showSettings} />

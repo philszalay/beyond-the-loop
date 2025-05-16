@@ -12,30 +12,50 @@
 		rechargeFlexCredits,
 		updateAutoRecharge,
 		getCurrentSubscription,
-		deleteCurrentSubscription
+		deleteCurrentSubscription,
+		redirectToCustomerPortal
 	} from '$lib/apis/payments';
 	import dayjs from 'dayjs';
 	import { toast } from 'svelte-sonner';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import { goto } from '$app/navigation';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	const i18n = getContext('i18n');
 	export let autoRecharge = false;
 	export let subscriptionLoading = false;
 	let showUpdateDetails = false;
+	let showBuyFlexCredits = false;
 
+	$: console.log(showUpdateDetails)
+	let mounted = false;
 	export let plans = [];
-	// onMount(async () => {
-	// 	const res = await getSubscriptionPlans(localStorage.token).catch((error) => console.log(error));
-	// 	if (res) {
-	// 		plans = res;
-	// 		console.log(plans);
-	// 	}
-	// });
+	onMount(() => {
+		mounted = true;
+		const url = new URL(window.location.href);
+		const plansParam = url.searchParams.get('plans');
+		if(plansParam === 'open'){
+			showUpdateDetails = true;
+		}
+		const rechargeParam = url.searchParams.get('recharge');
+		if(rechargeParam === 'open'){
+			showBuyFlexCredits = true;
+		}
+	})
 
 	async function upgradeSubscription(plan_id) {
 		const res = await createSubscriptionSession(localStorage.token, plan_id).catch((error) =>
 			console.log(error)
 		);
+		if (res) {
+			window.location.href = res.url;
+		}
+	}
+
+	async function goToCustomerPortal() {
+		const res = await redirectToCustomerPortal(localStorage.token).catch((error) => {
+			console.log(error)
+		});
 		if (res) {
 			window.location.href = res.url;
 		}
@@ -88,8 +108,34 @@
 	$: currentPlan = plans?.find((item) => item.id === $subscription?.plan);
 	$: console.log(currentPlan, 'current plan');
 
-	$: seatsWidth = $subscription?.seats ? `${($subscription?.seats_taken/$subscription?.seats*100)}%` : '100%';
+	$: seatsWidth = $subscription?.seats ? $subscription?.seats_taken > $subscription?.seats ? '100%' : `${($subscription?.seats_taken/$subscription?.seats*100)}%` : '100%';
+	$: creditsWidth = $subscription?.credits_remaining ? `${(((currentPlan?.credits_per_month - $subscription?.credits_remaining)/currentPlan?.credits_per_month) * 100)}%` : '100%';
+	
+
+	$: {
+		if(showBuyFlexCredits === false && mounted){
+			const url = new URL(window.location.href);
+			url.searchParams.delete('recharge'); 
+			window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+		}
+	}
 </script>
+
+
+<ConfirmDialog
+	bind:show={showBuyFlexCredits}
+	title={$i18n.t('Buy credits?')}
+	on:confirm={recharge}
+	on:cancel={() => {
+		const url = new URL(window.location.href);
+		url.searchParams.delete('recharge'); 
+		window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+	}}
+>
+	<div class=" text-sm text-gray-500 flex-1 line-clamp-3">
+		{$i18n.t('You will be charged for')} <span class="  font-semibold">€{(25).toFixed(2)}</span>.
+	</div>
+</ConfirmDialog>
 
 <UpdatePaymentDetails
 	bind:show={showUpdateDetails}
@@ -151,6 +197,8 @@
 					</div>
 				{/each}
 			</div>
+		{:else}
+			<Spinner/>
 		{/if}
 	</div>
 </UpdatePaymentDetails>
@@ -169,19 +217,19 @@
 				<div class="flex items-center gap-2.5">
 					{#if $subscription?.plan === 'starter' || $subscription?.plan === 'free'}
 						<div
-							class="mb-2.5 flex justify-center items-center w-[50px] h-[50px] bg-[#024D15] rounded-mdx text-[#0F8C18]"
+							class="flex justify-center items-center w-[50px] h-[50px] bg-[#024D15] rounded-mdx text-[#0F8C18]"
 						>
 							<StarterPlanIcon className="size-6" />
 						</div>
 					{:else if $subscription?.plan === 'team'}
 						<div
-							class="mb-2.5 flex justify-center items-center w-[50px] h-[50px] bg-[#4621A5] rounded-mdx text-[#A588EF]"
+							class="flex justify-center items-center w-[50px] h-[50px] bg-[#4621A5] rounded-mdx text-[#A588EF]"
 						>
 							<BusinessPlanIcon className="size-6" />
 						</div>
 					{:else if $subscription?.plan === 'growth'}
 						<div
-							class="mb-2.5 flex justify-center items-center w-[50px] h-[50px] bg-[#840E70] rounded-mdx text-[#F294E2]"
+							class="flex justify-center items-center w-[50px] h-[50px] bg-[#840E70] rounded-mdx text-[#F294E2]"
 						>
 							<GrowthPlanIcon className="size-6" />
 						</div>
@@ -194,16 +242,21 @@
 							<div
 								class="flex justify-center items-center text-xs dark:text-customGray-590 dark:bg-customGray-800 px-2 py-1 rounded-mdx"
 							>
-								Monthly
+								{$i18n.t('Monthly')}
 							</div>
 						</div>
-						<div class="text-xs dark:text-customGray-100/50 mt-2">
-							€{currentPlan?.price_monthly ? currentPlan?.price_monthly / 100 : '0.00'}/mo
+						<div class="text-xs dark:text-customGray-100/50">
+							€{currentPlan?.price_monthly ? (currentPlan?.price_monthly / 100).toFixed(2) : '0.00'}/mo
 						</div>
 					</div>
 				</div>
 				<button
-					on:click={() => (showUpdateDetails = true)}
+					on:click={() => {
+						showUpdateDetails = true
+						const url = new URL(window.location.href);
+						url.searchParams.set('plans', 'open'); 
+						window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+					}}
 					class="flex items-center justify-center rounded-mdx dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-3 text-xs dark:text-customGray-200"
 				>
 					{$i18n.t('Explore Plans')}
@@ -243,17 +296,22 @@
 			</div>
 		</div>
 		<div class="rounded-2xl dark:bg-customGray-900 pt-4 px-4 pb-4 mb-2.5">
-			<div class="flex items-center justify-between pb-2.5 border-b dark:border-customGray-700">
+			<div class="flex items-center justify-between pb-2.5 border-b dark:border-customGray-700 mb-5">
 				<div class="text-xs dark:text-customGray-300 font-medium">{$i18n.t('Base credits')}</div>
 				<div class="text-xs dark:text-customGray-590">
 					{#if $subscription?.plan !== 'free'}
-					<span class="text-xs dark:text-customGray-100">{currentPlan?.credits_per_month - $subscription?.credits_remaining} {$i18n.t('used')}</span><span
-						class="dark:text-customGray-590">/ {currentPlan?.credits_per_month} {$i18n.t('included')}</span
+					<span class="text-xs dark:text-customGray-100">€{(currentPlan?.credits_per_month - $subscription?.credits_remaining)?.toFixed(2)} {$i18n.t('used')}</span><span
+						class="dark:text-customGray-590">/ €{(currentPlan?.credits_per_month).toFixed(2)} {$i18n.t('included')}</span
 					>
 					{:else}
-						<span class="text-xs dark:text-customGray-100">{$subscription?.credits_remaining} {$i18n.t('credits remaining')}</span>
+					<span class="text-xs dark:text-customGray-100">€{(5 - $subscription?.credits_remaining)?.toFixed(2)} {$i18n.t('used')}</span><span
+						class="dark:text-customGray-590">/ €{(5).toFixed(2)} {$i18n.t('included')}</span
+					>
 					{/if}
 				</div>
+			</div>
+			<div class="relative w-full h-1 rounded-sm bg-customGray-800 mb-2.5">
+				<div style={`width: ${creditsWidth};`} class="absolute left-0 h-1 rounded-sm bg-[#024D15]"></div>
 			</div>
 			<div class="flex items-center justify-between pt-2.5">
 				{#if $subscription?.plan !== 'free' && $subscription?.cancel_at_period_end !== true}
@@ -264,6 +322,12 @@
 					<div></div>
 				{/if}
 				<button
+					on:click={() => {
+						const url = new URL(window.location.href);
+						url.searchParams.set('modal', 'company-settings');
+						url.searchParams.set('tab', 'analytics');
+						goto(`${url.pathname}${url.search}`, { replaceState: false });
+					}}
 					class="flex items-center justify-center rounded-[10px] dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
 				>
 					{$i18n.t('View usage details')}
@@ -278,7 +342,7 @@
 					<div class="text-xs dark:text-customGray-590">
 						<!-- <span class="text-xs dark:text-customGray-100">0 {$i18n.t('used')}</span> -->
 						<span
-							class="dark:text-customGray-100">{$subscription?.flex_credits_remaining ? $subscription?.flex_credits_remaining : 0} {$i18n.t('remaining')}</span
+							class="dark:text-customGray-100">€{($subscription?.flex_credits_remaining ? $subscription?.flex_credits_remaining : 0).toFixed(2)} {$i18n.t('remaining')}</span
 						>
 					</div>
 				</div>
@@ -299,8 +363,13 @@
 						</div>
 					</div>
 					<button
-						on:click={recharge}
-						class="flex items-center justify-center rounded-[10px] dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
+						on:click={() => {
+							showBuyFlexCredits = true;
+							const url = new URL(window.location.href);
+							url.searchParams.set('recharge', 'open'); 
+							window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+						}}
+						class="flex items-center justify-center rounded-[10px] dark:hover:bg-customGray-950 border dark:border-customGray-700 px-8 py-2 text-xs dark:text-customGray-200"
 					>
 						{$i18n.t('Buy credits')}
 					</button>
@@ -308,31 +377,35 @@
 			</div>
 		{/if}
 
-		<!-- <div
-			class="flex w-full justify-between items-center py-2.5 border-b border-customGray-700 mb-2.5 mt-2.5"
-		>
-			<div class="flex w-full justify-between items-center">
-				<div class="text-xs dark:text-customGray-300">{$i18n.t('Billing details')}</div>
-			</div>
-		</div>
-		<button
-			class="flex items-center justify-center rounded-[10px] dark:bg-customGray-900 dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
-		>
-			{$i18n.t('Update billing details')}
-		</button>
-		<div
-			class="flex w-full justify-between items-center py-2.5 border-b border-customGray-700 mb-2.5 mt-2.5"
-		>
-			<div class="flex w-full justify-between items-center">
-				<div class="text-xs dark:text-customGray-300">{$i18n.t('History')}</div>
-			</div>
-		</div>
-		<button
-			class="flex items-center justify-center rounded-[10px] dark:bg-customGray-900 dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
-		>
-			{$i18n.t('View billing statement')}
-		</button> -->
 		{#if $subscription?.plan !== "free"}
+			<div
+				class="flex w-full justify-between items-center py-2.5 border-b border-customGray-700 mb-2.5 mt-2.5"
+			>
+				<div class="flex w-full justify-between items-center">
+					<div class="text-xs dark:text-customGray-300">{$i18n.t('Billing details')}</div>
+				</div>
+			</div>
+			<button
+				on:click={goToCustomerPortal}
+				class="flex items-center justify-center rounded-[10px] dark:bg-customGray-900 dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
+			>
+				{$i18n.t('Update billing details')}
+			</button>
+			<div
+				class="flex w-full justify-between items-center py-2.5 border-b border-customGray-700 mb-2.5 mt-2.5"
+			>
+				<div class="flex w-full justify-between items-center">
+					<div class="text-xs dark:text-customGray-300">{$i18n.t('History')}</div>
+				</div>
+			</div>
+			<button
+				on:click={goToCustomerPortal}
+				class="flex items-center justify-center rounded-[10px] dark:bg-customGray-900 dark:hover:bg-customGray-950 border dark:border-customGray-700 px-4 py-2 text-xs dark:text-customGray-200"
+			>
+				{$i18n.t('View billing statement')}
+			</button>
+		{/if}
+		<!-- {#if $subscription?.plan !== "free"}
 			<div
 				class="flex w-full justify-between items-center py-2.5 border-b border-customGray-700 mb-2.5 mt-2.5"
 			>
@@ -351,7 +424,7 @@
 			>
 				{$i18n.t('Cancel Subscription')}
 			</button>
-		{/if}
+		{/if} -->
 	</div>
 {:else}
 	<div class="h-[20rem] w-full flex justify-center items-center">

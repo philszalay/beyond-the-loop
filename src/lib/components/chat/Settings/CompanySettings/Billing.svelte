@@ -143,7 +143,7 @@
 >
 	<div>
 		{#if plans?.length > 0}
-			<div class="grid grid-cols-3 gap-2">
+			<div class="grid md:grid-cols-3 gap-2">
 				{#each plans as plan}
 					<div class="bg-lightGray-300 dark:bg-customGray-900 rounded-lg p-5 flex flex-col items-center">
 						{#if plan.id === 'starter'}
@@ -267,7 +267,7 @@
 				<div class="text-xs text-lightGray-100 dark:text-customGray-100">{$i18n.t('Billing details')}</div>
 				{#if $subscription?.cancel_at_period_end}
 					<div class="text-xs dark:text-customGray-590">
-						Canceled at {dayjs($subscription?.canceled_at * 1000)?.format('DD.MM.YYYY')}
+						Canceled at {dayjs($subscription?.end_date * 1000)?.format('DD.MM.YYYY')}
 					</div>
 				{:else if $subscription?.plan !== 'free'}
 					<div class="text-xs dark:text-customGray-590">
